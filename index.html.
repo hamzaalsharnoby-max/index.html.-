@@ -1,0 +1,444 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Taxi Alexandria 3D</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;font-family:Arial;background:#87ceeb}
+canvas{display:block}
+#hud{position:fixed;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;color:white;pointer-events:none}
+.panel{background:#101b2ddd;padding:12px;border-radius:12px}
+#mission{position:fixed;top:75px;left:50%;transform:translateX(-50%);background:#101b2ddd;color:white;padding:12px;border-radius:12px;text-align:center;min-width:220px}
+#controls{position:fixed;bottom:20px;left:10px;right:10px;display:flex;justify-content:space-between}
+.group{display:flex;gap:10px}
+button{background:#17283ddd;color:white;border:2px solid #ffffff66;border-radius:15px;padding:15px;font-size:20px;min-width:60px;touch-action:none}
+button:active{background:#e8bd23;color:black}
+#action{position:fixed;bottom:105px;left:50%;transform:translateX(-50%);background:#087b4d}
+#camera{position:fixed;top:110px;left:10px;font-size:13px}
+#speed{position:fixed;bottom:155px;left:10px;background:#101b2ddd;color:white;padding:12px;border-radius:12px}
+</style>
+</head>
+<body>
+
+<div id="hud">
+ <div class="panel">🚕 TAXI ALEXANDRIA 3D</div>
+ <div class="panel">💰 <span id="money">0</span> جنيه</div>
+</div>
+
+<div id="mission">ابحث عن الراكب الأصفر</div>
+<button id="camera">تغيير الكاميرا</button>
+<div id="speed">السرعة: 0 كم/س</div>
+
+<button id="action">تفاعل / ركوب</button>
+
+<div id="controls">
+ <div class="group">
+  <button data-key="left">◀</button>
+  <button data-key="right">▶</button>
+ </div>
+ <div class="group">
+  <button data-key="brake">فرامل</button>
+  <button data-key="gas">▲</button>
+ </div>
+</div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+// إعداد اللعبة
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8bd0ed);
+scene.fog=new THREE.Fog(0x8bd0ed,100,280);
+
+const camera=new THREE.PerspectiveCamera(
+65,innerWidth/innerHeight,.1,500
+);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2));
+
+const sun=new THREE.DirectionalLight(0xffffff,2.5);
+sun.position.set(-50,80,40);
+sun.castShadow=true;
+scene.add(sun);
+
+function material(color){
+ return new THREE.MeshStandardMaterial({color,roughness:.8});
+}
+
+const roadMat=material(0x34383d);
+const yellow=material(0xf4c400);
+const black=material(0x171717);
+const glass=material(0x8ac6dc);
+const white=material(0xffffff);
+const sand=material(0xd7c39d);
+
+// إنشاء المجسمات
+function box(parent,w,h,d,mat,x,y,z){
+ const obj=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),mat
+ );
+ obj.position.set(x,y,z);
+ obj.castShadow=true;
+ obj.receiveShadow=true;
+ parent.add(obj);
+ return obj;
+}
+
+// الأرض
+box(scene,500,.2,500,sand,0,-.2,0);
+
+// الطرق
+function makeRoad(x,z,w,d){
+ box(scene,w,.12,d,roadMat,x,0,z);
+ box(scene,w,.14,1,material(0xb8ad9d),x,.05,z-d/2);
+ box(scene,w,.14,1,material(0xb8ad9d),x,.05,z+d/2);
+}
+
+makeRoad(0,0,230,15);
+makeRoad(0,-50,230,15);
+makeRoad(0,50,230,15);
+makeRoad(-65,0,15,110);
+makeRoad(65,0,15,110);
+
+// البحر
+const sea=new THREE.Mesh(
+ new THREE.PlaneGeometry(250,90),
+ material(0x087eb8)
+);
+sea.rotation.x=-Math.PI/2;
+sea.position.set(0,-.05,-125);
+scene.add(sea);
+
+// كورنيش الإسكندرية
+box(scene,250,.5,2,material(0xe2d5bc),0,.3,-80);
+
+// المباني
+const colors=[
+ 0xe8d9c1,0xd3c1a4,0xf1e7d5,
+ 0xcbb99d,0xe5d0b3
+];
+
+for(let x=-105;x<=105;x+=15){
+ for(let z of [-30,30]){
+  if(Math.abs(x)<15)continue;
+
+  let h=10+Math.random()*20;
+  let w=9+Math.random()*3;
+
+  box(
+   scene,w,h,10,
+   material(colors[Math.floor(Math.random()*colors.length)]),
+   x,h/2,z
+  );
+
+  for(let y=3;y<h-1;y+=3){
+   for(let xx=-w/2+2;xx<w/2;xx+=3){
+    box(scene,1,1.4,.1,glass,
+     x+xx,y,z+(z>0?-5.1:5.1));
+   }
+  }
+ }
+}
+
+// النخيل
+for(let x=-100;x<=100;x+=13){
+ const trunk=new THREE.Mesh(
+  new THREE.CylinderGeometry(.2,.35,5,8),
+  material(0x805532)
+ );
+ trunk.position.set(x,2.5,-79);
+ scene.add(trunk);
+
+ const leaves=new THREE.Mesh(
+  new THREE.SphereGeometry(2,8,8),
+  material(0x277943)
+ );
+ leaves.scale.set(1.5,.4,1);
+ leaves.position.set(x,5,-79);
+ scene.add(leaves);
+}
+
+// التاكسي
+const taxi=new THREE.Group();
+scene.add(taxi);
+
+box(taxi,2.3,.7,4.5,yellow,0,.75,0);
+box(taxi,2,1,2.2,yellow,0,1.5,-.3);
+box(taxi,1.8,.7,2,glass,0,1.55,-.3);
+
+// علامة التاكسي
+box(taxi,.8,.2,.7,white,0,2.1,-.3);
+
+// العجلات
+let wheels=[];
+
+for(let x of [-1.2,1.2]){
+ for(let z of [-1.4,1.4]){
+  const wheel=new THREE.Mesh(
+   new THREE.CylinderGeometry(.42,.42,.3,16),
+   black
+  );
+  wheel.rotation.z=Math.PI/2;
+  wheel.position.set(x,.45,z);
+  taxi.add(wheel);
+  wheels.push(wheel);
+ }
+}
+
+taxi.position.set(0,0,15);
+
+// سيارات المرور
+let traffic=[];
+
+for(let i=0;i<10;i++){
+ const car=new THREE.Group();
+
+ box(car,2,.7,4,material(
+  [0xffffff,0x222222,0x2875bd,0xc93232][i%4]
+ ),0,.7,0);
+
+ box(car,1.6,.7,2,glass,0,1.3,0);
+
+ car.position.set(-100+i*22,0,i%2?4:-4);
+ car.userData.speed=5+Math.random()*5;
+ traffic.push(car);
+ scene.add(car);
+}
+
+// الراكب
+const passenger=new THREE.Group();
+scene.add(passenger);
+
+const body=new THREE.Mesh(
+ new THREE.CylinderGeometry(.4,.45,1.3,12),
+ material(0x2467ad)
+);
+body.position.y=.8;
+passenger.add(body);
+
+const head=new THREE.Mesh(
+ new THREE.SphereGeometry(.35,12,12),
+ material(0xc68d69)
+);
+head.position.y=1.7;
+passenger.add(head);
+
+// علامة الراكب
+const marker=new THREE.Mesh(
+ new THREE.CylinderGeometry(2,2,.15,24),
+ yellow
+);
+scene.add(marker);
+
+// الوجهة
+const destinationMarker=new THREE.Mesh(
+ new THREE.CylinderGeometry(2,2,.15,24),
+ material(0x22dd77)
+);
+scene.add(destinationMarker);
+
+let pickup={x:-45,z:0};
+let destination={x:50,z:-50};
+let hasPassenger=false;
+let money=0;
+let speed=0;
+let angle=0;
+let cameraMode=0;
+
+function newPickup(){
+ pickup={
+  x:(Math.random()>.5?1:-1)*(30+Math.random()*60),
+  z:[-50,0,50][Math.floor(Math.random()*3)]
+ };
+
+ passenger.position.set(pickup.x,0,pickup.z);
+ marker.position.set(pickup.x,.2,pickup.z);
+}
+
+function newDestination(){
+ destination={
+  x:(Math.random()>.5?1:-1)*(30+Math.random()*70),
+  z:[-50,0,50][Math.floor(Math.random()*3)]
+ };
+
+ destinationMarker.position.set(
+  destination.x,.2,destination.z
+ );
+}
+
+newPickup();
+
+// التحكم
+let keys={};
+
+document.addEventListener('keydown',e=>{
+ keys[e.key.toLowerCase()]=true;
+});
+
+document.addEventListener('keyup',e=>{
+ keys[e.key.toLowerCase()]=false;
+});
+
+document.querySelectorAll('[data-key]').forEach(btn=>{
+ const k=btn.dataset.key;
+
+ btn.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  keys[k]=true;
+ });
+
+ const release=e=>{
+  e.preventDefault();
+  keys[k]=false;
+ };
+
+ btn.addEventListener('pointerup',release);
+ btn.addEventListener('pointerleave',release);
+ btn.addEventListener('pointercancel',release);
+});
+
+// ركوب وتسليم الراكب
+document.getElementById('action').onclick=()=>{
+ const target=hasPassenger?destination:pickup;
+
+ const distance=Math.hypot(
+  taxi.position.x-target.x,
+  taxi.position.z-target.z
+ );
+
+ if(distance>9){
+  document.getElementById('mission').textContent=
+   'اقترب من العلامة أولاً!';
+  return;
+ }
+
+ if(!hasPassenger){
+  hasPassenger=true;
+  passenger.visible=false;
+  marker.visible=false;
+  newDestination();
+  destinationMarker.visible=true;
+
+  document.getElementById('mission').textContent=
+   'الراكب ركب! توجه إلى العلامة الخضراء';
+ }else{
+  hasPassenger=false;
+  destinationMarker.visible=false;
+  money+=75+Math.floor(Math.random()*75);
+
+  document.getElementById('money').textContent=money;
+
+  document.getElementById('mission').textContent=
+   'رحلة ناجحة! ابحث عن راكب جديد';
+
+  passenger.visible=true;
+  marker.visible=true;
+  newPickup();
+ }
+};
+
+// تغيير الكاميرا
+document.getElementById('camera').onclick=()=>{
+ cameraMode=(cameraMode+1)%3;
+};
+
+// تشغيل اللعبة
+const clock=new THREE.Clock();
+
+function animate(){
+ requestAnimationFrame(animate);
+
+ const dt=Math.min(clock.getDelta(),.04);
+
+ let gas=keys['arrowup']||keys['w']||keys.gas;
+ let brake=keys['arrowdown']||keys['s']||keys.brake;
+ let left=keys['arrowleft']||keys['a']||keys.left;
+ let right=keys['arrowright']||keys['d']||keys.right;
+
+ if(gas)speed=Math.min(speed+12*dt,28);
+ else if(brake)speed=Math.max(speed-20*dt,-7);
+ else speed*=Math.pow(.97,dt*60);
+
+ if(Math.abs(speed)>.3){
+  if(left)angle+=1.6*dt*Math.sign(speed);
+  if(right)angle-=1.6*dt*Math.sign(speed);
+ }
+
+ taxi.rotation.y=angle;
+
+ taxi.position.x+=Math.sin(angle)*speed*dt;
+ taxi.position.z+=Math.cos(angle)*speed*dt;
+
+ taxi.position.x=Math.max(-110,Math.min(110,taxi.position.x));
+ taxi.position.z=Math.max(-65,Math.min(100,taxi.position.z));
+
+ wheels.forEach(w=>w.rotation.x+=speed*dt);
+
+ // حركة المرور
+ traffic.forEach(car=>{
+  car.position.x+=car.userData.speed*dt;
+  if(car.position.x>120)car.position.x=-120;
+ });
+
+ // الكاميرا خلف التاكسي
+ let distance=cameraMode===0?11:cameraMode===1?7:17;
+ let height=cameraMode===1?4:7;
+
+ let cameraPosition=new THREE.Vector3(
+  taxi.position.x-Math.sin(angle)*distance,
+  height,
+  taxi.position.z-Math.cos(angle)*distance
+ );
+
+ camera.position.lerp(cameraPosition,.09);
+
+ camera.lookAt(
+  taxi.position.x,
+  1.2,
+  taxi.position.z
+ );
+
+ document.getElementById('speed').textContent=
+  'السرعة: '+Math.round(Math.abs(speed)*3.6)+' كم/س';
+
+ // فحص الوصول للراكب أو الوجهة
+ const target=hasPassenger?destination:pickup;
+
+ const dist=Math.hypot(
+  taxi.position.x-target.x,
+  taxi.position.z-target.z
+ );
+
+ if(dist<9){
+  document.getElementById('mission').textContent=
+   hasPassenger?
+   'وصلت! اضغط تفاعل لتسليم الراكب':
+   'وصلت للراكب! اضغط تفاعل لركوبه';
+ }
+
+ marker.rotation.y+=dt;
+
+ renderer.render(scene,camera);
+}
+
+animate();
+
+window.addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
